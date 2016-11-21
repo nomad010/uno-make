@@ -1,6 +1,5 @@
 #include "arduino_lib/Arduino.h"
 
-int val;
 const int ledPin = 13;
 
 void setup() 
@@ -13,7 +12,7 @@ void loop()
 {
     if(Serial.available())
     {
-        val = Serial.read();
+        int val = Serial.read();
     
         if(val == 'r')
             digitalWrite(ledPin, HIGH);
