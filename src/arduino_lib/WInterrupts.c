@@ -30,10 +30,41 @@
 #include <avr/pgmspace.h>
 #include <stdio.h>
 
-#include "WConstants.h"
 #include "wiring_private.h"
 
-volatile static voidFuncPtr intFunc[EXTERNAL_NUM_INTERRUPTS];
+static void nothing(void) {
+}
+
+static volatile voidFuncPtr intFunc[EXTERNAL_NUM_INTERRUPTS] = {
+#if EXTERNAL_NUM_INTERRUPTS > 8
+    #warning There are more than 8 external interrupts. Some callbacks may not be initialized.
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 7
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 6
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 5
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 4
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 3
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 2
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 1
+    nothing,
+#endif
+#if EXTERNAL_NUM_INTERRUPTS > 0
+    nothing,
+#endif
+};
 // volatile static voidFuncPtr twiIntFunc;
 
 void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) {
@@ -48,7 +79,31 @@ void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) {
     // Enable the interrupt.
       
     switch (interruptNum) {
-#if defined(EICRA) && defined(EICRB) && defined(EIMSK)
+#if defined(__AVR_ATmega32U4__)
+	// I hate doing this, but the register assignment differs between the 1280/2560
+	// and the 32U4.  Since avrlib defines registers PCMSK1 and PCMSK2 that aren't 
+	// even present on the 32U4 this is the only way to distinguish between them.
+    case 0:
+	EICRA = (EICRA & ~((1<<ISC00) | (1<<ISC01))) | (mode << ISC00);
+	EIMSK |= (1<<INT0);
+	break;
+    case 1:
+	EICRA = (EICRA & ~((1<<ISC10) | (1<<ISC11))) | (mode << ISC10);
+	EIMSK |= (1<<INT1);
+	break;	
+    case 2:
+        EICRA = (EICRA & ~((1<<ISC20) | (1<<ISC21))) | (mode << ISC20);
+        EIMSK |= (1<<INT2);
+        break;
+    case 3:
+        EICRA = (EICRA & ~((1<<ISC30) | (1<<ISC31))) | (mode << ISC30);
+        EIMSK |= (1<<INT3);
+        break;
+    case 4:
+        EICRB = (EICRB & ~((1<<ISC60) | (1<<ISC61))) | (mode << ISC60);
+        EIMSK |= (1<<INT6);
+        break;
+#elif defined(EICRA) && defined(EICRB) && defined(EIMSK)
     case 2:
       EICRA = (EICRA & ~((1 << ISC00) | (1 << ISC01))) | (mode << ISC00);
       EIMSK |= (1 << INT0);
@@ -81,7 +136,7 @@ void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) {
       EICRB = (EICRB & ~((1 << ISC70) | (1 << ISC71))) | (mode << ISC70);
       EIMSK |= (1 << INT7);
       break;
-#else
+#else		
     case 0:
     #if defined(EICRA) && defined(ISC00) && defined(EIMSK)
       EICRA = (EICRA & ~((1 << ISC00) | (1 << ISC01))) | (mode << ISC00);
@@ -111,6 +166,19 @@ void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) {
       #warning attachInterrupt may need some more work for this cpu (case 1)
     #endif
       break;
+    
+    case 2:
+    #if defined(EICRA) && defined(ISC20) && defined(ISC21) && defined(EIMSK)
+      EICRA = (EICRA & ~((1 << ISC20) | (1 << ISC21))) | (mode << ISC20);
+      EIMSK |= (1 << INT2);
+    #elif defined(MCUCR) && defined(ISC20) && defined(ISC21) && defined(GICR)
+      MCUCR = (MCUCR & ~((1 << ISC20) | (1 << ISC21))) | (mode << ISC20);
+      GICR |= (1 << INT2);
+    #elif defined(MCUCR) && defined(ISC20) && defined(GIMSK) && defined(GIMSK)
+      MCUCR = (MCUCR & ~((1 << ISC20) | (1 << ISC21))) | (mode << ISC20);
+      GIMSK |= (1 << INT2);
+    #endif
+      break;
 #endif
     }
   }
@@ -122,7 +190,23 @@ void detachInterrupt(uint8_t interruptNum) {
     // to the number of the EIMSK bit to clear, as this isn't true on the 
     // ATmega8.  There, INT0 is 6 and INT1 is 7.)
     switch (interruptNum) {
-#if defined(EICRA) && defined(EICRB) && defined(EIMSK)
+#if defined(__AVR_ATmega32U4__)
+    case 0:
+        EIMSK &= ~(1<<INT0);
+        break;
+    case 1:
+        EIMSK &= ~(1<<INT1);
+        break;
+    case 2:
+        EIMSK &= ~(1<<INT2);
+        break;
+    case 3:
+        EIMSK &= ~(1<<INT3);
+        break;	
+    case 4:
+        EIMSK &= ~(1<<INT6);
+        break;	
+#elif defined(EICRA) && defined(EICRB) && defined(EIMSK)
     case 2:
       EIMSK &= ~(1 << INT0);
       break;
@@ -171,10 +255,22 @@ void detachInterrupt(uint8_t interruptNum) {
       #warning detachInterrupt may need some more work for this cpu (case 1)
     #endif
       break;
+      
+    case 2:
+    #if defined(EIMSK) && defined(INT2)
+      EIMSK &= ~(1 << INT2);
+    #elif defined(GICR) && defined(INT2)
+      GICR &= ~(1 << INT2); // atmega32
+    #elif defined(GIMSK) && defined(INT2)
+      GIMSK &= ~(1 << INT2);
+    #elif defined(INT2)
+      #warning detachInterrupt may need some more work for this cpu (case 2)
+    #endif
+      break;       
 #endif
     }
       
-    intFunc[interruptNum] = 0;
+    intFunc[interruptNum] = nothing;
   }
 }
 
@@ -184,64 +280,81 @@ void attachInterruptTwi(void (*userFunc)(void) ) {
 }
 */
 
-#if defined(EICRA) && defined(EICRB)
-
-SIGNAL(INT0_vect) {
-  if(intFunc[EXTERNAL_INT_2])
-    intFunc[EXTERNAL_INT_2]();
-}
-
-SIGNAL(INT1_vect) {
-  if(intFunc[EXTERNAL_INT_3])
-    intFunc[EXTERNAL_INT_3]();
-}
-
-SIGNAL(INT2_vect) {
-  if(intFunc[EXTERNAL_INT_4])
-    intFunc[EXTERNAL_INT_4]();
-}
-
-SIGNAL(INT3_vect) {
-  if(intFunc[EXTERNAL_INT_5])
-    intFunc[EXTERNAL_INT_5]();
-}
-
-SIGNAL(INT4_vect) {
-  if(intFunc[EXTERNAL_INT_0])
+#if defined(__AVR_ATmega32U4__)
+ISR(INT0_vect) {
     intFunc[EXTERNAL_INT_0]();
 }
 
-SIGNAL(INT5_vect) {
-  if(intFunc[EXTERNAL_INT_1])
+ISR(INT1_vect) {
     intFunc[EXTERNAL_INT_1]();
 }
 
-SIGNAL(INT6_vect) {
-  if(intFunc[EXTERNAL_INT_6])
+ISR(INT2_vect) {
+    intFunc[EXTERNAL_INT_2]();
+}
+
+ISR(INT3_vect) {
+    intFunc[EXTERNAL_INT_3]();
+}
+
+ISR(INT6_vect) {
+    intFunc[EXTERNAL_INT_4]();
+}
+
+#elif defined(EICRA) && defined(EICRB)
+
+ISR(INT0_vect) {
+    intFunc[EXTERNAL_INT_2]();
+}
+
+ISR(INT1_vect) {
+    intFunc[EXTERNAL_INT_3]();
+}
+
+ISR(INT2_vect) {
+    intFunc[EXTERNAL_INT_4]();
+}
+
+ISR(INT3_vect) {
+    intFunc[EXTERNAL_INT_5]();
+}
+
+ISR(INT4_vect) {
+    intFunc[EXTERNAL_INT_0]();
+}
+
+ISR(INT5_vect) {
+    intFunc[EXTERNAL_INT_1]();
+}
+
+ISR(INT6_vect) {
     intFunc[EXTERNAL_INT_6]();
 }
 
-SIGNAL(INT7_vect) {
-  if(intFunc[EXTERNAL_INT_7])
+ISR(INT7_vect) {
     intFunc[EXTERNAL_INT_7]();
 }
 
 #else
 
-SIGNAL(INT0_vect) {
-  if(intFunc[EXTERNAL_INT_0])
+ISR(INT0_vect) {
     intFunc[EXTERNAL_INT_0]();
 }
 
-SIGNAL(INT1_vect) {
-  if(intFunc[EXTERNAL_INT_1])
+ISR(INT1_vect) {
     intFunc[EXTERNAL_INT_1]();
 }
+
+#if defined(EICRA) && defined(ISC20)
+ISR(INT2_vect) {
+    intFunc[EXTERNAL_INT_2]();
+}
+#endif
 
 #endif
 
 /*
-SIGNAL(SIG_2WIRE_SERIAL) {
+ISR(TWI_vect) {
   if(twiIntFunc)
     twiIntFunc();
 }

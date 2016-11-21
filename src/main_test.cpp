@@ -1,24 +1,40 @@
-#include "arduino_lib/WProgram.h"
+#include "arduino_lib/Arduino.h"
+
+int val;
+const int ledPin = 13;
 
 void setup() 
 {
-    pinMode(13, OUTPUT);
+    Serial.begin(115200);
+    pinMode(ledPin, OUTPUT);
 }
 
 void loop() 
 {
-    digitalWrite(13, HIGH);
-    delay(10000);
-    digitalWrite(13, LOW);
-    delay(500);
+    if(Serial.available())
+    {
+        val = Serial.read();
+    
+        if(val == 'r')
+            digitalWrite(ledPin, HIGH);
+        else
+            digitalWrite(ledPin, LOW);
+    }
 }
 
 int main() 
 {
     /// Setup the device
     init();
+#if defined(USBCON)
+    USBDevice.attach();
+#endif
     setup();
     while(true)
+    {
         loop();
+        if(serialEventRun)
+            serialEventRun();
+    }
 }
 
